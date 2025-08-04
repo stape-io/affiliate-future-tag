@@ -1,5 +1,6 @@
 const BigQuery = require('BigQuery');
 const encodeUriComponent = require('encodeUriComponent');
+const generateRandom = require('generateRandom');
 const getAllEventData = require('getAllEventData');
 const getContainerVersion = require('getContainerVersion');
 const getCookieValues = require('getCookieValues');
@@ -126,16 +127,25 @@ function mapRequestData(data, eventData) {
   const orderValue = data.hasOwnProperty('orderValue') ? data.orderValue : eventData.value;
   if (isValidValue(orderValue)) requestData.orderValue = orderValue;
 
+  const currency = data.hasOwnProperty('currency')
+    ? data.currency
+    : eventData.currency || eventData.currencyCode;
+  if (currency) requestData.curr = currency;
+
   const clickId = getClickId(data, eventData);
   if (clickId) requestData.affc = clickId;
-
-  const payoutCodes = data.payoutCodes;
-  if (payoutCodes) requestData.payoutCodes = payoutCodes;
 
   const voucher = data.hasOwnProperty('voucher') ? data.voucher : eventData.coupon;
   if (voucher) requestData.voucher = voucher;
 
+  const payoutCodes = data.payoutCodes;
+  if (payoutCodes) requestData.payoutCodes = payoutCodes;
+
+  requestData.offlineCode = ''; // Required for the integration to work.
+
   addProductsData(data, eventData, requestData);
+
+  requestData.r = generateRandom(100000000, 999999999);
 
   return requestData;
 }
@@ -156,7 +166,7 @@ function generateRequestUrlParameters(requestData) {
   const requestParametersList = [];
   for (const key in requestData) {
     const value = requestData[key];
-    if (!isValidValue(value)) continue;
+    if (key !== 'offlineCode' && !isValidValue(value)) continue;
     requestParametersList.push(enc(key) + '=' + enc(value));
   }
 
