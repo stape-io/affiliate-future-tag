@@ -34,6 +34,7 @@ When the event type is set to `Conversion`, the tag sends the final transaction 
 -   **affc Value (Click ID)**: The unique Click ID for attribution. If left empty, the tag will automatically retrieve this value from the server-side `affc_cid` cookie, and will fallback to the JS script `Affc` cookie if needed.
 
 ### Optional Parameters
+-   **Currency Code**: The currency code per the ISO 4217 standard (EUR, USD etc.).
 -   **Voucher**: The voucher code used in the transaction. The tag will try to use `coupon` from the event data if not specified.
 -   **Payout Codes**: A comma-separated string to apply different commission rates to specific parts of an order (e.g., `CODE1,10.50,CODE2,25.00`).
 -   **Products (Product Level Tracking)**: An array of product objects for detailed reporting. The tag can automatically use `items` from the event data. Each product object should include properties like `id`, `sku`, `name`, `category`, `price`, and `quantity`.
