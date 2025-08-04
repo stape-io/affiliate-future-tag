@@ -206,6 +206,13 @@ ___TEMPLATE_PARAMETERS___
       },
       {
         "type": "TEXT",
+        "name": "currency",
+        "displayName": "Currency Code",
+        "simpleValueType": true,
+        "help": "Optional.\n\u003cbr/\u003e\u003cbr/\u003e\nThe value must be a recognized currency code as per \u003ca href\u003d\"http://en.wikipedia.org/wiki/ISO_4217\"\u003eISO-4217 standard\u003c/a\u003e (e.g. EUR, USD, etc.).\n\u003cbr/\u003e\u003cbr/\u003e\nDefault: \u003ci\u003eeventData.currency\u003c/i\u003e \u003e \u003ci\u003eeventData.currencyCode\u003c/i\u003e.\n\u003cbr/\u003e\nIf you do not wish to fallback to the default value, pass your own value to this field."
+      },
+      {
+        "type": "TEXT",
         "name": "clickId",
         "displayName": "affc Value (Click ID)",
         "simpleValueType": true,
@@ -393,6 +400,7 @@ ___SANDBOXED_JS_FOR_SERVER___
 
 const BigQuery = require('BigQuery');
 const encodeUriComponent = require('encodeUriComponent');
+const generateRandom = require('generateRandom');
 const getAllEventData = require('getAllEventData');
 const getContainerVersion = require('getContainerVersion');
 const getCookieValues = require('getCookieValues');
@@ -519,16 +527,25 @@ function mapRequestData(data, eventData) {
   const orderValue = data.hasOwnProperty('orderValue') ? data.orderValue : eventData.value;
   if (isValidValue(orderValue)) requestData.orderValue = orderValue;
 
+  const currency = data.hasOwnProperty('currency')
+    ? data.currency
+    : eventData.currency || eventData.currencyCode;
+  if (currency) requestData.curr = currency;
+
   const clickId = getClickId(data, eventData);
   if (clickId) requestData.affc = clickId;
-
-  const payoutCodes = data.payoutCodes;
-  if (payoutCodes) requestData.payoutCodes = payoutCodes;
 
   const voucher = data.hasOwnProperty('voucher') ? data.voucher : eventData.coupon;
   if (voucher) requestData.voucher = voucher;
 
+  const payoutCodes = data.payoutCodes;
+  if (payoutCodes) requestData.payoutCodes = payoutCodes;
+
+  requestData.offlineCode = ''; // Required for the integration to work.
+
   addProductsData(data, eventData, requestData);
+
+  requestData.r = generateRandom(100000000, 999999999);
 
   return requestData;
 }
@@ -549,7 +566,7 @@ function generateRequestUrlParameters(requestData) {
   const requestParametersList = [];
   for (const key in requestData) {
     const value = requestData[key];
-    if (!isValidValue(value)) continue;
+    if (key !== 'offlineCode' && !isValidValue(value)) continue;
     requestParametersList.push(enc(key) + '=' + enc(value));
   }
 
@@ -1179,7 +1196,7 @@ scenarios:
     setAllMockDataByEventType('conversion');
 
     mock('sendHttpRequest', (requestUrl, callback, requestOptions, requestBody) => {
-      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=6468464&orderValue=1&affc=73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3&payoutCodes=payout&voucher=vouchertest&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2");
+      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=6468464&orderValue=123.45&curr=BRL&affc=73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3&voucher=vouchertest&payoutCodes=payout&offlineCode=&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2&r=123456789");
       callback(200);
     });
 
@@ -1201,7 +1218,7 @@ scenarios:
     });
 
     mock('sendHttpRequest', (requestUrl, callback, requestOptions, requestBody) => {
-      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=transactionId&orderValue=123.45&affc=affcFromServerCookie&payoutCodes=payout&voucher=coupon&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2");
+      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=transactionId&orderValue=123.45&curr=BRL&affc=affcFromServerCookie&voucher=coupon&payoutCodes=payout&offlineCode=&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2&r=123456789");
       callback(200);
     });
 
@@ -1221,7 +1238,7 @@ scenarios:
     });
 
     mock('sendHttpRequest', (requestUrl, callback, requestOptions, requestBody) => {
-      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=6468464&orderValue=1&affc=affcFromJSTagCookie&payoutCodes=payout&voucher=vouchertest&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2");
+      assertThat(requestUrl).isEqualTo("https://scripts.affiliatefuture.com/AFSaleV5.aspx?merchant=7591&orderID=6468464&orderValue=123.45&curr=BRL&affc=affcFromJSTagCookie&voucher=vouchertest&payoutCodes=payout&offlineCode=&products=SKU_12345%7C%7CStan%20and%20Friends%20Tee%7CApparel_iajsdiajsd_oasodiasd%7C10.01%7C3%7C%2C%7CSKU_12346%7C%7CGoogle%20Grey%20Women's%20(Tee)%7CApparel_iajsdiajsd_oasodiasd%7C21.01%7C2&r=123456789");
       callback(200);
     });
 
@@ -1367,20 +1384,20 @@ setup: "const JSON = require('JSON');\nconst Promise = require('Promise');\ncons
   \ = {\n    pageView: {\n      type: 'pageView',\n      clickIdParameterName: 'affc',\n\
   \      cookieDomain: 'auto',\n      cookieHttpOnly: true,\n      cookieExpiration:\
   \ '30',\n    },\n    conversion: {\n      type: 'conversion',\n      merchantId:\
-  \ '7591',\n      orderId: '6468464',\n      orderValue: '1',\n      clickId: '73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3',\n\
-  \      voucher: 'vouchertest',\n      payoutCodes: 'payout',\n      products: items,\n\
-  \      useOptimisticScenario: false,\n      logType: 'debug',\n      bigQueryLogType:\
-  \ 'no',\n      logBigQueryProjectId: expectedBigQuerySettings.logBigQueryProjectId,\n\
-  \      logBigQueryDatasetId: expectedBigQuerySettings.logBigQueryDatasetId,\n  \
-  \    logBigQueryTableId: expectedBigQuerySettings.logBigQueryTableId\n    }\n  };\n\
-  \  \n  mergeObj(mockDataByEventType[type], objToBeMerged || {});\n  mergeObj(mockData,\
+  \ '7591',\n      orderId: '6468464',\n      orderValue: 123.45,\n      currency:\
+  \ 'BRL',\n      clickId: '73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3',\n      voucher:\
+  \ 'vouchertest',\n      payoutCodes: 'payout',\n      products: items,\n      useOptimisticScenario:\
+  \ false,\n      logType: 'debug',\n      bigQueryLogType: 'no',\n      logBigQueryProjectId:\
+  \ expectedBigQuerySettings.logBigQueryProjectId,\n      logBigQueryDatasetId: expectedBigQuerySettings.logBigQueryDatasetId,\n\
+  \      logBigQueryTableId: expectedBigQuerySettings.logBigQueryTableId\n    }\n\
+  \  };\n  \n  mergeObj(mockDataByEventType[type], objToBeMerged || {});\n  mergeObj(mockData,\
   \ mockDataByEventType[type]);\n  return mockData;\n};\n\nmock('sendHttpRequest',\
   \ (requestUrl, callback, requestOptions, requestBody) => {\n  if (typeof callback\
   \ === 'function') {\n    callback(200);\n  } else {\n    requestBody = requestOptions;\n\
   \    requestOptions = callback;\n    return Promise.create((resolve, reject) =>\
   \ {\n      resolve({ statusCode: 200 });\n    });  \n  }\n});\n\nmock('getRequestHeader',\
   \ (header) => {\n  if (header === 'trace-id') return 'expectedTraceId';\n});\n\n\
-  mock('getTimestampMillis', 1747945830456);"
+  mock('getTimestampMillis', 1747945830456);\n\nmock('generateRandom', 123456789);"
 
 
 ___NOTES___
