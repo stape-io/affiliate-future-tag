@@ -50,7 +50,7 @@ ___TEMPLATE_PARAMETERS___
     ],
     "simpleValueType": true,
     "defaultValue": "pageView",
-    "help": "\u003cb\u003ePage View\u003c/b\u003e \n\u003cbr/\u003e\nCaptures the Click ID from the URL and saves it to cookie for attribution:  \u003ci\u003e{affc}\u003c/i\u003e URL parameter value inside the \u003ci\u003eaffc_cid\u003c/i\u003e cookie.\n\u003cbr/\u003e\n\u003cbr/\u003e\n\u003cb\u003eConversion\u003c/b\u003e\n\u003cbr/\u003e\nSends a postback with conversion data to Affiliate Future."
+    "help": "\u003cb\u003ePage View\u003c/b\u003e \n\u003cbr/\u003e\nCaptures the Click ID from the URL and saves it into a cookie for attribution: the \u003ci\u003e{affc}\u003c/i\u003e URL parameter value is saved inside the \u003ci\u003eaffc_cid\u003c/i\u003e cookie.\n\u003cbr/\u003e\n\u003cbr/\u003e\n\u003cb\u003eConversion\u003c/b\u003e\n\u003cbr/\u003e\nSends a postback with conversion data to Affiliate Future."
   },
   {
     "type": "GROUP",
@@ -255,22 +255,95 @@ ___TEMPLATE_PARAMETERS___
     "groupStyle": "ZIPPY_CLOSED",
     "subParams": [
       {
-        "type": "RADIO",
-        "name": "adStorageConsent",
-        "displayName": "",
-        "radioItems": [
+        "type": "SELECT",
+        "name": "consentDetection",
+        "displayName": "Consent Detection",
+        "macrosInSelect": false,
+        "selectItems": [
           {
-            "value": "optional",
-            "displayValue": "Send data always"
+            "value": "auto",
+            "displayValue": "Automatically detect consent from Google Consent Mode or Stape\u0027s Data Tag"
           },
           {
-            "value": "required",
-            "displayValue": "Send data in case marketing consent given",
-            "help": "Aborts the tag execution if marketing consent (\u003ci\u003ead_storage\u003c/i\u003e Google Consent Mode or Stape\u0027s Data Tag parameter) is not given."
+            "value": "manual",
+            "displayValue": "Manually specify the Consent Status"
           }
         ],
         "simpleValueType": true,
-        "defaultValue": "optional"
+        "subParams": [
+          {
+            "type": "SELECT",
+            "name": "consentAutoParameter",
+            "displayName": "Consent Status Parameter",
+            "selectItems": [
+              {
+                "value": "analytics_storage",
+                "displayValue": "analytics_storage"
+              },
+              {
+                "value": "ad_storage",
+                "displayValue": "ad_storage"
+              }
+            ],
+            "simpleValueType": true,
+            "help": "If you are using Google Consent Mode or Stape\u0027s Data Tag to transmit consent to the server, choose the Google Consent Mode or the Stape\u0027s Data Tag parameter corresponding to the consent category to which the Affiliate Future cookies were allocated in your Consent Management Platform.",
+            "enablingConditions": [
+              {
+                "paramName": "consentDetection",
+                "paramValue": "auto",
+                "type": "EQUALS"
+              }
+            ],
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ]
+          },
+          {
+            "type": "TEXT",
+            "name": "consentManualValue",
+            "displayName": "Consent Status Manual",
+            "simpleValueType": true,
+            "help": "Use this field if you are not using Google Consent Mode.\n\u003cbr/\u003e\nThis field allows you to specify the user consent status using a custom variable.\n\u003cbr/\u003e\nAccepted values are: \u003ci\u003e0\u003c/i\u003e,\u003ci\u003efalse\u003c/i\u003e,\u003ci\u003e1\u003c/i\u003e,\u003ci\u003etrue\u003c/i\u003e.\n\u003cbr/\u003e\nIf any other values are passed, or the field is left blank, the tag will assume \u003ci\u003etrue\u003c/i\u003e was specified.",
+            "enablingConditions": [
+              {
+                "paramName": "consentDetection",
+                "paramValue": "manual",
+                "type": "EQUALS"
+              }
+            ]
+          },
+          {
+            "type": "GROUP",
+            "name": "loyaltyJourneyTrackingGroup",
+            "subParams": [
+              {
+                "type": "CHECKBOX",
+                "name": "enableLoyaltyJourneyTracking",
+                "checkboxText": "Enable Unconditional Tracking from Loyalty Platforms",
+                "simpleValueType": true,
+                "help": "Enable this option to exempt traffic from Loyalty platforms from consent restrictions. It will be identified by the tag using the \u003ci\u003eafloyalty\u003d1\u003c/i\u003e URL query parameter.\n\u003cbr/\u003e\nThe Click ID \u003ci\u003eaffc_cid\u003c/i\u003e cookie will be written regardless of consent.\n\u003cbr/\u003e\n\u003ca href\u003d\"https://affiliatefuture.freshdesk.com/support/solutions/articles/79000146483-cookie-management-platforms-and-loyalty-publishers\"\u003eLearn more\u003c/a\u003e.",
+                "enablingConditions": [
+                  {
+                    "paramName": "consentDetection",
+                    "paramValue": "",
+                    "type": "PRESENT"
+                  }
+                ],
+                "defaultValue": true
+              }
+            ],
+            "enablingConditions": [
+              {
+                "paramName": "type",
+                "paramValue": "pageView",
+                "type": "EQUALS"
+              }
+            ]
+          }
+        ],
+        "notSetText": "Send data always"
       }
     ]
   },
@@ -419,12 +492,13 @@ const setCookie = require('setCookie');
 ==============================================================================*/
 
 const traceId = getRequestHeader('trace-id');
-
 const eventData = getAllEventData();
-
 const useOptimisticScenario = isUIFieldTrue(data.useOptimisticScenario);
 
-if (!isConsentGivenOrNotRequired(data, eventData)) {
+if (
+  isConsentDeclined(data, eventData) &&
+  !isJourneyExemptFromConsent(data, eventData) /* Only on Page View */
+) {
   return data.gtmOnSuccess();
 }
 
@@ -452,6 +526,46 @@ if (useOptimisticScenario) {
 /*==============================================================================
   Vendor related functions
 ==============================================================================*/
+
+function isJourneyExemptFromConsent(data, eventData) {
+  const url = eventData.page_location || getRequestHeader('referer');
+  if (!url) return false;
+
+  const urlSearchParams = parseUrl(url).searchParams;
+  if (
+    data.enableLoyaltyJourneyTracking /* UI field enabled only on Page View */ &&
+    urlSearchParams.afloyalty === '1'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isConsentDeclined(data, eventData) {
+  const consentDetection = data.consentDetection;
+
+  if (!consentDetection) return false;
+
+  const autoConsentParameter = data.consentAutoParameter;
+  if (consentDetection === 'auto' && autoConsentParameter) {
+    // Check consent state from Stape's Data Tag
+    if (eventData.consent_state && eventData.consent_state[autoConsentParameter] === false) {
+      return true;
+    }
+
+    // Check consent state from Google Consent Mode
+    const gcsPositionMapping = { analytics_storage: 3, ad_storage: 2 };
+    const xGaGcs = eventData['x-ga-gcs'] || ''; // x-ga-gcs is a string like "G110"
+    if (xGaGcs[gcsPositionMapping[autoConsentParameter]] === '0') {
+      return true;
+    }
+  } else if (consentDetection === 'manual') {
+    // Check template field specific consent signal
+    return ['0', 0, 'false', false].indexOf(data.consentManualValue) !== -1;
+  }
+
+  return false;
+}
 
 function parseClickIdFromUrl(eventData) {
   const url = eventData.page_location || getRequestHeader('referer');
@@ -657,13 +771,6 @@ function isValidValue(value) {
 
 function enc(data) {
   return encodeUriComponent(makeString(data || ''));
-}
-
-function isConsentGivenOrNotRequired(data, eventData) {
-  if (data.adStorageConsent !== 'required') return true;
-  if (eventData.consent_state) return !!eventData.consent_state.ad_storage;
-  const xGaGcs = eventData['x-ga-gcs'] || ''; // x-ga-gcs is a string like "G110"
-  return xGaGcs[2] === '1';
 }
 
 function log(rawDataToLog) {
@@ -1096,6 +1203,42 @@ ___SERVER_PERMISSIONS___
 ___TESTS___
 
 scenarios:
+- name: '[Page View] Click ID cookie is read and set when Cookie Consent Auto or Manual
+    is Granted'
+  code: "const originalMockData = setAllMockDataByEventType('pageView', {\n  enableLoyaltyJourneyTracking:\
+    \ false\n});\n\nsetGetAllEventData({\n  page_location: 'https://example.com?affc=bar&utm_source=affiliatefuture'\n\
+    });\n\n[\n  { consentDetection: undefined },\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'ad_storage' },\n  { consentDetection: 'auto', consentAutoParameter: 'analytics_storage'\
+    \ },\n  { consentDetection: 'manual', consentManualValue: true },\n  { consentDetection:\
+    \ 'manual', consentManualValue: 1 }\n].forEach(scenario => {\n  const copyMockData\
+    \ = JSON.parse(JSON.stringify(originalMockData));\n  mergeObj(copyMockData, scenario);\n\
+    \  \n  runCode(copyMockData);\n \n  assertApi('gtmOnSuccess').wasCalled();\n \
+    \ assertApi('gtmOnFailure').wasNotCalled();\n  assertApi('setCookie').wasCalled();\n\
+    });"
+- name: '[Page View] Click ID cookie is NOT read and set when Cookie Consent Auto
+    or Manual is Denied'
+  code: "const originalMockData = setAllMockDataByEventType('pageView', {\n  enableLoyaltyJourneyTracking:\
+    \ false\n});\n\nsetGetAllEventData({\n  page_location: 'https://example.com?affc=bar&utm_source=affiliatefuture',\n\
+    \  'x-ga-gcs': 'G100'\n});\n\n[\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'analytics_storage' },\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'ad_storage' },\n  { consentDetection: 'manual', consentManualValue: false },\n\
+    \  { consentDetection: 'manual', consentManualValue: 0 }\n].forEach(scenario =>\
+    \ {\n  const copyMockData = JSON.parse(JSON.stringify(originalMockData));\n  mergeObj(copyMockData,\
+    \ scenario);\n  \n  runCode(copyMockData);\n \n  assertApi('gtmOnSuccess').wasCalled();\n\
+    \  assertApi('gtmOnFailure').wasNotCalled();\n  assertApi('setCookie').wasNotCalled();\n\
+    });"
+- name: '[Page View] Click ID cookie is read and set when Cookie Consent Auto or Manual
+    is Denied but Unconditional Tracking from Loyalty Platforms is Enabled'
+  code: "const originalMockData = setAllMockDataByEventType('pageView', {\n  enableLoyaltyJourneyTracking:\
+    \ true\n});\n\nsetGetAllEventData({\n  page_location: 'https://example.com?affc=bar&utm_source=affiliatefuture&afloyalty=1',\n\
+    \  'x-ga-gcs': 'G100'\n});\n\n[\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'analytics_storage' },\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'ad_storage' },\n  { consentDetection: 'manual', consentManualValue: false },\n\
+    \  { consentDetection: 'manual', consentManualValue: 0 }\n].forEach(scenario =>\
+    \ {\n  const copyMockData = JSON.parse(JSON.stringify(originalMockData));\n  mergeObj(copyMockData,\
+    \ scenario);\n  \n  runCode(copyMockData);\n \n  assertApi('gtmOnSuccess').wasCalled();\n\
+    \  assertApi('gtmOnFailure').wasNotCalled();\n  assertApi('setCookie').wasCalled();\n\
+    });"
 - name: '[Page View] Click ID cookie is NOT set if URL doesn''t contain it'
   code: |-
     setAllMockDataByEventType('pageView');
@@ -1154,6 +1297,17 @@ scenarios:
     assertApi('gtmOnSuccess').wasCalled();
     assertApi('gtmOnFailure').wasNotCalled();
     assertApi('setCookie').wasCalledWith('affc_cid', expectedClickId, expectedOverwrittenCookieOptions, false);
+- name: '[Conversion] Request is not sent if consent is denied'
+  code: "const originalMockData = setAllMockDataByEventType('conversion');\n\nsetGetAllEventData({\n\
+    \  'x-ga-gcs': 'G100'\n});\n\n[\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'analytics_storage' },\n  { consentDetection: 'auto', consentAutoParameter:\
+    \ 'ad_storage' },\n  { consentDetection: 'manual', consentManualValue: false },\n\
+    \  { consentDetection: 'manual', consentManualValue: 0 }\n].forEach(scenario =>\
+    \ {\n  const copyMockData = JSON.parse(JSON.stringify(originalMockData));\n  mergeObj(copyMockData,\
+    \ scenario);\n  \n  runCode(copyMockData);\n \n  assertApi('gtmOnSuccess').wasCalled();\n\
+    \  assertApi('gtmOnFailure').wasNotCalled();\n  assertApi('getCookieValues').wasNotCalled();\n\
+    \  assertApi('setCookie').wasNotCalled();\n  assertApi('sendHttpRequest').wasNotCalled();\n\
+    });"
 - name: '[Conversion] Request is not sent if required parameters are missing'
   code: "const originalMockData = setAllMockDataByEventType('conversion');\n\n[\n\
     \  { orderId: undefined },\n  { orderValue: undefined },\n  { merchantId: undefined\
@@ -1379,14 +1533,14 @@ setup: "const JSON = require('JSON');\nconst Promise = require('Promise');\ncons
   \  logBigQueryDatasetId: 'logBigQueryDatasetId',\n  logBigQueryTableId: 'logBigQueryTableId'\n\
   };\n\nconst requiredConsoleKeys = ['Type', 'TraceId', 'Name'];\nconst requiredBqKeys\
   \ = ['timestamp', 'type', 'trace_id', 'tag_name'];\nconst expectedBqOptions = {\
-  \ ignoreUnknownValues: true };\n\nconst mockData = {\n  adStorageConsent: 'optional',\n\
-  };\n\nconst setAllMockDataByEventType = (type, objToBeMerged) => {\n  const mockDataByEventType\
-  \ = {\n    pageView: {\n      type: 'pageView',\n      clickIdParameterName: 'affc',\n\
-  \      cookieDomain: 'auto',\n      cookieHttpOnly: true,\n      cookieExpiration:\
-  \ '30',\n    },\n    conversion: {\n      type: 'conversion',\n      merchantId:\
-  \ '7591',\n      orderId: '6468464',\n      orderValue: 123.45,\n      currency:\
-  \ 'BRL',\n      clickId: '73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3',\n      voucher:\
-  \ 'vouchertest',\n      payoutCodes: 'payout',\n      products: items,\n      useOptimisticScenario:\
+  \ ignoreUnknownValues: true };\n\nconst mockData = {};\nconst setAllMockDataByEventType\
+  \ = (type, objToBeMerged) => {\n  const mockDataByEventType = {\n    pageView: {\n\
+  \      type: 'pageView',\n      clickIdParameterName: 'affc',\n      cookieDomain:\
+  \ 'auto',\n      cookieHttpOnly: true,\n      cookieExpiration: '30',\n    },\n\
+  \    conversion: {\n      type: 'conversion',\n      merchantId: '7591',\n     \
+  \ orderId: '6468464',\n      orderValue: 123.45,\n      currency: 'BRL',\n     \
+  \ clickId: '73b77cc0-8d58-4bf7-a8d0-2f84cedccfe3',\n      voucher: 'vouchertest',\n\
+  \      payoutCodes: 'payout',\n      products: items,\n      useOptimisticScenario:\
   \ false,\n      logType: 'debug',\n      bigQueryLogType: 'no',\n      logBigQueryProjectId:\
   \ expectedBigQuerySettings.logBigQueryProjectId,\n      logBigQueryDatasetId: expectedBigQuerySettings.logBigQueryDatasetId,\n\
   \      logBigQueryTableId: expectedBigQuerySettings.logBigQueryTableId\n    }\n\
