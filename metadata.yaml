@@ -1,6 +1,8 @@
 homepage: 'https://stape.io/'
 documentation: 'https://github.com/stape-io/affiliate-future-tag'
 versions:
+  - sha: 6edace7eacb31b62e8d1e1d6dc413e3b5750f515
+    changeNotes: Added loyalty journeys consent support.
   - sha: 13d4408f4290af7a16b9ed662eb8b0c92372ba00
     changeNotes: Added currency code field.
   - sha: 7f30548ac210e8a434907aad7808c73433c2464e
