@@ -19,12 +19,13 @@ const setCookie = require('setCookie');
 ==============================================================================*/
 
 const traceId = getRequestHeader('trace-id');
-
 const eventData = getAllEventData();
-
 const useOptimisticScenario = isUIFieldTrue(data.useOptimisticScenario);
 
-if (!isConsentGivenOrNotRequired(data, eventData)) {
+if (
+  isConsentDeclined(data, eventData) &&
+  !isJourneyExemptFromConsent(data, eventData) /* Only on Page View */
+) {
   return data.gtmOnSuccess();
 }
 
@@ -52,6 +53,46 @@ if (useOptimisticScenario) {
 /*==============================================================================
   Vendor related functions
 ==============================================================================*/
+
+function isJourneyExemptFromConsent(data, eventData) {
+  const url = eventData.page_location || getRequestHeader('referer');
+  if (!url) return false;
+
+  const urlSearchParams = parseUrl(url).searchParams;
+  if (
+    data.enableLoyaltyJourneyTracking /* UI field enabled only on Page View */ &&
+    urlSearchParams.afloyalty === '1'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isConsentDeclined(data, eventData) {
+  const consentDetection = data.consentDetection;
+
+  if (!consentDetection) return false;
+
+  const autoConsentParameter = data.consentAutoParameter;
+  if (consentDetection === 'auto' && autoConsentParameter) {
+    // Check consent state from Stape's Data Tag
+    if (eventData.consent_state && eventData.consent_state[autoConsentParameter] === false) {
+      return true;
+    }
+
+    // Check consent state from Google Consent Mode
+    const gcsPositionMapping = { analytics_storage: 3, ad_storage: 2 };
+    const xGaGcs = eventData['x-ga-gcs'] || ''; // x-ga-gcs is a string like "G110"
+    if (xGaGcs[gcsPositionMapping[autoConsentParameter]] === '0') {
+      return true;
+    }
+  } else if (consentDetection === 'manual') {
+    // Check template field specific consent signal
+    return ['0', 0, 'false', false].indexOf(data.consentManualValue) !== -1;
+  }
+
+  return false;
+}
 
 function parseClickIdFromUrl(eventData) {
   const url = eventData.page_location || getRequestHeader('referer');
@@ -257,13 +298,6 @@ function isValidValue(value) {
 
 function enc(data) {
   return encodeUriComponent(makeString(data || ''));
-}
-
-function isConsentGivenOrNotRequired(data, eventData) {
-  if (data.adStorageConsent !== 'required') return true;
-  if (eventData.consent_state) return !!eventData.consent_state.ad_storage;
-  const xGaGcs = eventData['x-ga-gcs'] || ''; // x-ga-gcs is a string like "G110"
-  return xGaGcs[2] === '1';
 }
 
 function log(rawDataToLog) {
