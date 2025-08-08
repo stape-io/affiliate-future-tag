@@ -23,7 +23,7 @@ When the event type is set to `Page View`, the tag's role is to capture the uniq
 
 ### Conversion
 
-When the event type is set to `Conversion`, the tag sends the final transaction data to Affiliate Future. It automatically retrieves the Click ID from the `affc_cid` cookie set during the Page View.
+When the event type is set to `Conversion`, the tag sends the final transaction data to Affiliate Future. It automatically retrieves the Click ID from the `affc_cid` server-side cookie set during the Page View, or the `Affc` cookie set by the web JS script.
 
 ## Parameters (Conversion Event)
 
@@ -31,13 +31,23 @@ When the event type is set to `Conversion`, the tag sends the final transaction 
 -   **Merchant ID**: The Merchant ID provided by Affiliate Future.
 -   **Order ID**: A unique ID for the transaction. The tag will try to use `orderId`, `order_id`, or `transaction_id` from the event data if not specified.
 -   **Order Value**: The total net value of the transaction (excluding taxes, delivery, etc.). The tag will try to use `value` from the event data if not specified.
--   **affc Value (Click ID)**: The unique Click ID for attribution. If left empty, the tag will automatically retrieve this value from the server-side `affc_cid` cookie, and will fallback to the JS script `Affc` cookie if needed.
+-   **affc Value (Click ID)**: The unique Click ID for attribution. If left empty, the tag will automatically retrieve this value from the server-side `affc_cid` cookie, and will fallback to the web JS script `Affc` cookie if needed.
 
 ### Optional Parameters
 -   **Currency Code**: The currency code per the ISO 4217 standard (EUR, USD etc.).
 -   **Voucher**: The voucher code used in the transaction. The tag will try to use `coupon` from the event data if not specified.
 -   **Payout Codes**: A comma-separated string to apply different commission rates to specific parts of an order (e.g., `CODE1,10.50,CODE2,25.00`).
 -   **Products (Product Level Tracking)**: An array of product objects for detailed reporting. The tag can automatically use `items` from the event data. Each product object should include properties like `id`, `sku`, `name`, `category`, `price`, and `quantity`.
+
+## Consent Settings
+
+This section controls how the tag handles user consent for setting and reading the `affc_cid` cookie and reading the `Affc` cookie.
+
+- **Consent Detecion**: You can choose how the tag determines consent:
+  - **Send data always**: Tag tag does not check for consent. It will always sets and read cookies, and send data to Affiliate Future.
+  - **Automatically**: The tag will check for consent signals from Google Consent Mode or Stape's Data Tag.
+  - **Manually**: You can provide a custom variable that specifies the consent status (`true`/`false` or `1`/`0`).
+- **Enable Unconditional Tracking from Loyalty Platforms**: This is a special setting for **Loyalty Platforms journeys** (identified by the `afloyalty=1` URL query parameter on the landing page URL). When enabled, the tag is allowed to set the Click ID cookie (`affc_cid`) even if the user has not given consent.
 
 ## Open Source
 
